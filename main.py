@@ -3,6 +3,7 @@ import math
 import time
 import threading
 import tkinter as tk
+from tkinter import ttk
 import logging
 from datetime import datetime
 
@@ -42,8 +43,10 @@ class Dysk(threading.Thread):
         self.serwer = serwer
         self.zatrzymaj = False
         self.aktywny_plik = None
+        self.aktualny_klient = None  # Dodajemy nową właściwość
         self.postep_przesylania = 0
         self.blokada = threading.Lock()
+
 
     def run(self):
         while not self.zatrzymaj:
@@ -52,8 +55,10 @@ class Dysk(threading.Thread):
                     klient, plik = self.przeprowadz_aukcje(self.serwer.klienci)
                     if klient:
                         self.aktywny_plik = plik
+                        self.aktualny_klient = klient  # Przypisujemy klienta do przesyłania pliku
                         self.przeslij_plik(plik)
                         self.aktywny_plik = None
+                        self.aktualny_klient = None  # Po przesłaniu resetujemy klienta
             time.sleep(1)
 
     def przeslij_plik(self, rozmiar_pliku):
@@ -98,7 +103,6 @@ class Dysk(threading.Thread):
         else:
             return None, None
 
-# Klasa Serwera
 # Klasa Serwera
 class Serwer:
     def __init__(self):
@@ -159,7 +163,8 @@ class GUI:
     def aktualizuj_interfejs(self):
         for i, dysk in enumerate(self.serwer.dyski):
             postep = f"{dysk.postep_przesylania}%" if dysk.aktywny_plik else "Wolny"
-            self.labels_dyski[i].config(text=f"Dysk {i}: {postep}")
+            klient_info = f", Klient {dysk.aktualny_klient.id_klienta}" if dysk.aktualny_klient else ""
+            self.labels_dyski[i].config(text=f"Dysk {i}: {postep}{klient_info}")
             self.labels_dyski[i].pack()
 
         for label in self.labels_klienci:
