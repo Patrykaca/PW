@@ -41,6 +41,7 @@ class Dysk(threading.Thread):
         super().__init__()
         self.id_dysku = id_dysku
         self.serwer = serwer
+        self.predkosc_przesylania = 50 * 10 ** 6  # 50MB/s
         self.zatrzymaj = False
         self.aktywny_plik = None
         self.aktualny_klient = None  # Dodajemy nową właściwość
@@ -63,7 +64,7 @@ class Dysk(threading.Thread):
 
     def przeslij_plik(self, rozmiar_pliku):
         try:
-            czas_przesylania = rozmiar_pliku / (50 * 10**6)  # 50MB/s
+            czas_przesylania = rozmiar_pliku / self.predkosc_przesylania
             for _ in range(10):  # Symulacja przesyłania podzielona na 10 kroków
                 time.sleep(czas_przesylania / 10)
                 self.postep_przesylania += 10  # Aktualizacja postępu
@@ -77,27 +78,24 @@ class Dysk(threading.Thread):
         wybrany_klient = None
         wybrany_plik = None
 
-        for klient in klienci:
-            if klient.pliki:
-                rozmiar_pliku = klient.pliki[0]  # najmniejszy plik
-                t = klient.oblicz_czas_oczekiwania()
-                k = len(klienci)
-                # wynik = (k / (rozmiar_pliku + 1)) + math.log(t + 1) / k
-                wynik = (k * 10**9/ (rozmiar_pliku + 1)) + math.log(t + 1) / k
-                if wynik > najlepszy_wynik:
-                    najlepszy_wynik = wynik
-                    wybrany_klient = klient
-                    wybrany_plik = rozmiar_pliku
+        # Lista klientów z plikami do przesłania
+        klienci_z_plikami = [klient for klient in klienci if klient.pliki]
 
-        # Aktualizacja wyniku aukcji dla każdego klienta
-        for klient in klienci:
-            if klient.pliki:
-                rozmiar_pliku = klient.pliki[0] if klient.pliki else 0
-                t = klient.oblicz_czas_oczekiwania()
-                k = len(klienci)
-                klient.ostatni_wynik_aukcji = (k* 10**6 / (rozmiar_pliku + 1)) + math.log(t + 1) / k
+        # Liczba klientów biorących udział w aukcji
+        k = len(klienci_z_plikami)
 
+        for klient in klienci_z_plikami:
+            rozmiar_pliku = klient.pliki[0]  # najmniejszy plik
+            t = klient.oblicz_czas_oczekiwania()
+            wynik = (k * 10 ** 9 / (rozmiar_pliku + 1)) + math.log(t + 1) / k
+            if wynik > najlepszy_wynik:
+                najlepszy_wynik = wynik
+                wybrany_klient = klient
+                wybrany_plik = rozmiar_pliku
+
+        # Aktualizujemy wynik aukcji dla klienta, który wygrał aukcję
         if wybrany_klient:
+            wybrany_klient.ostatni_wynik_aukcji = najlepszy_wynik
             wybrany_klient.pliki.pop(0)  # Usunięcie pliku z listy klienta
             return wybrany_klient, wybrany_plik
         else:
