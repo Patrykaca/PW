@@ -3,7 +3,6 @@ import math
 import time
 import threading
 import tkinter as tk
-from tkinter import ttk
 import logging
 from datetime import datetime
 
@@ -41,7 +40,7 @@ class Dysk(threading.Thread):
         super().__init__()
         self.id_dysku = id_dysku
         self.serwer = serwer
-        self.predkosc_przesylania = 50 * 10 ** 6  # 50MB/s
+        self.predkosc_przesylania = 25 * 10 ** 6  # 10MB/s
         self.zatrzymaj = False
         self.aktywny_plik = None
         self.aktualny_klient = None  # Dodajemy nową właściwość
@@ -107,9 +106,17 @@ class Serwer:
         self.klienci = []
         self.dyski = [Dysk(i, self) for i in range(5)]
 
+    def czy_symulacja_aktywna(self):
+        # Sprawdza, czy jakikolwiek dysk jest aktywny
+        return any(dysk.is_alive() for dysk in self.dyski)
+
     def dodaj_klienta(self):
         nowy_klient = Klient(len(self.klienci) + 1)
         self.klienci.append(nowy_klient)
+
+        # Jeśli symulacja jest aktywna, rozpocznij odliczanie czasu dla nowego klienta
+        if self.czy_symulacja_aktywna():
+            nowy_klient.rozpocznij_odliczanie()
 
     def uruchom(self):
         self.zatrzymaj_dyski()  # Upewniamy się, że poprzednie dyski są zatrzymane
@@ -173,8 +180,8 @@ class GUI:
             czas_oczekiwania = klient.oblicz_czas_oczekiwania()
             wynik_aukcji = f", Wynik aukcji: {klient.ostatni_wynik_aukcji:.2f}"
             rozmiary_plikow = ', '.join([f"{rozmiar//10**6}MB" for rozmiar in klient.pliki])
-            # label_text = f"Klient {klient.id_klienta}: {len(klient.pliki)} plików [{rozmiary_plikow}], Czas : {czas_oczekiwania:.2f} sekund{wynik_aukcji}"
-            label_text = f"Klient {klient.id_klienta}: {len(klient.pliki)} plików [{rozmiary_plikow}], {wynik_aukcji}"
+            label_text = f"Klient {klient.id_klienta}: {len(klient.pliki)} plików [{rozmiary_plikow}], Czas : {czas_oczekiwania:.2f} sekund{wynik_aukcji}"
+            # label_text = f"Klient {klient.id_klienta}: {len(klient.pliki)} plików [{rozmiary_plikow}], {wynik_aukcji}"
             label = tk.Label(self.root, text=label_text)
             label.pack()
             self.labels_klienci.append(label)
