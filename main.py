@@ -59,6 +59,8 @@ class Dysk(threading.Thread):
         # while not self.zatrzymaj:
         while True:
             with self.blokada:
+                while self.zatrzymaj:
+                    time.sleep(1)
                 if not self.aktywny_plik:
                     klient, plik = self.przeprowadz_aukcje(self.serwer.klienci)
                     if klient:
@@ -77,7 +79,6 @@ class Dysk(threading.Thread):
             while True:
                 while self.zatrzymaj:
                     time.sleep(1)
-                    print(self, 'sleep')
                 time.sleep(czas_przesylania / 10)
                 self.postep_przesylania += 10  # Aktualizacja postępu
                 i = i + 1
