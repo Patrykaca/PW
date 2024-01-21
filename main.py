@@ -56,39 +56,38 @@ class Dysk(threading.Thread):
 
 
     def run(self):
+        # while not self.zatrzymaj:
         while True:
-            if self.zatrzymaj:
-                time.sleep(1)  # Czekaj, gdy symulacja jest zatrzymana
-                continue
-
-            if not self.aktywny_plik:
-                klient, plik = self.przeprowadz_aukcje(self.serwer.klienci)
-                if klient:
-                    self.aktywny_plik = plik
-                    self.aktualny_klient = klient
-                    # Rozpocznij przesyłanie od zapisanego postępu
-                    start = self.postep_przesylania // 10
-                    self.przeslij_plik(plik, start=start)
-                    # Resetuj stan, jeśli przesyłanie zostało zakończone
-                    if not self.zatrzymaj:
+            with self.blokada:
+                if not self.aktywny_plik:
+                    klient, plik = self.przeprowadz_aukcje(self.serwer.klienci)
+                    if klient:
+                        self.aktywny_plik = plik
+                        self.aktualny_klient = klient  # Przypisujemy klienta do przesyłania pliku
+                        self.przeslij_plik(plik)
                         self.aktywny_plik = None
-                        self.aktualny_klient = None
+                        self.aktualny_klient = None  # Po przesłaniu resetujemy klienta
+            time.sleep(1)
 
-    def przeslij_plik(self, rozmiar_pliku, start=0):
+    def przeslij_plik(self, rozmiar_pliku):
         try:
-            czas_przesylania = (rozmiar_pliku / self.predkosc_przesylania) / 10
-            for i in range(start, 10):
-                if self.zatrzymaj:
-                    time.sleep(1)  # Czekaj, gdy symulacja jest zatrzymana
-                    continue
-                time.sleep(czas_przesylania)
-                self.postep_przesylania += 10
-            # Resetuj postęp, jeśli cały plik został przesłany
-            if self.postep_przesylania == 100:
-                logging.info(f"Dysk {self.id_dysku}: Zakończono przesyłanie pliku o rozmiarze {rozmiar_pliku}")
-                self.postep_przesylania = 0
+            i = 0
+            czas_przesylania = rozmiar_pliku / self.predkosc_przesylania
+            # for _ in range(10):  # Symulacja przesyłania podzielona na 10 kroków
+            while True:
+                while self.zatrzymaj:
+                    time.sleep(1)
+                    print(self, 'sleep')
+                time.sleep(czas_przesylania / 10)
+                self.postep_przesylania += 10  # Aktualizacja postępu
+                i = i + 1
+                if i == 10:
+                    break
+            logging.info(f"Dysk {self.id_dysku}: Zakończono przesyłanie pliku o rozmiarze {rozmiar_pliku}")
+            self.postep_przesylania = 0  # Reset postępu po przesłaniu pliku
         except Exception as e:
             logging.error(f"Dysk {self.id_dysku}: Wystąpił błąd podczas przesyłania pliku - {e}")
+
 
     def przeprowadz_aukcje(self, klienci):
         najlepszy_wynik = -1
@@ -123,12 +122,12 @@ class Serwer:
     def __init__(self):
         self.klienci = []
         self.dyski = [Dysk(i, self) for i in range(5)]
+        self.czy_aktywna = False
         self.czy_aktywowana = False
 
     def czy_symulacja_aktywna(self):
         # Sprawdza, czy jakikolwiek dysk jest aktywny
-        # return any(dysk.is_alive() for dysk in self.dyski)
-        return self.czy_aktywowana
+        return any(dysk.is_alive() for dysk in self.dyski)
 
     def dodaj_klienta(self):
         nowy_klient = Klient(len(self.klienci) + 1)
@@ -138,37 +137,39 @@ class Serwer:
         if self.czy_symulacja_aktywna():
             nowy_klient.rozpocznij_odliczanie()
 
+
     def uruchom(self):
-        if not self.czy_aktywowana:
-            self.zatrzymaj_dyski()  # Upewniamy się, że poprzednie dyski są zatrzymane
-            self.dyski = [Dysk(i, self) for i in range(5)]  # Tworzymy nowe wątki dysków
-            for dysk in self.dyski:
-                dysk.start()
-            self.czy_aktywowana = True
+        # self.zatrzymaj_dyski()  # Upewniamy się, że poprzednie dyski są zatrzymane
+        # self.dyski = [Dysk(i, self) for i in range(5)]  # Tworzymy nowe wątki dysków
+        for dysk in self.dyski:
+            dysk.start()
+            dysk.zatrzymaj = False
+        self.czy_aktywowana = True
 
     def zatrzymaj_dyski(self):
         for dysk in self.dyski:
             dysk.zatrzymaj = True
             if dysk.is_alive():  # Sprawdzenie, czy wątek został uruchomiony
                 dysk.join()      # Oczekujemy na zakończenie wątku tylko jeśli był uruchomiony
-        self.czy_aktywowana = False
+
 
     def rozpocznij_symulacje(self):
         for klient in self.klienci:
             klient.rozpocznij_odliczanie()
         if not self.czy_aktywowana:
             self.uruchom()
-            self.czy_aktywowana = True
         else:
             for dysk in self.dyski:
                 dysk.zatrzymaj = False
+        self.czy_aktywna = True
+
 
     def zatrzymaj_symulacje(self):
         for dysk in self.dyski:
             dysk.zatrzymaj = True
         for klient in self.klienci:
             klient.zatrzymaj_odliczanie()
-        self.czy_aktywowana = False
+        self.czy_aktywna = False
 
     def czy_zakonczyc(self):
         return all(not klient.pliki for klient in self.klienci)
