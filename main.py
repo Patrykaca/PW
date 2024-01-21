@@ -49,26 +49,37 @@ class Dysk(threading.Thread):
 
 
     def run(self):
-        while not self.zatrzymaj:
-            with self.blokada:
-                if not self.aktywny_plik:
-                    klient, plik = self.przeprowadz_aukcje(self.serwer.klienci)
-                    if klient:
-                        self.aktywny_plik = plik
-                        self.aktualny_klient = klient  # Przypisujemy klienta do przesyłania pliku
-                        self.przeslij_plik(plik)
-                        self.aktywny_plik = None
-                        self.aktualny_klient = None  # Po przesłaniu resetujemy klienta
-            time.sleep(1)
+        while True:
+            if self.zatrzymaj:
+                time.sleep(1)  # Czekaj, gdy symulacja jest zatrzymana
+                continue
 
-    def przeslij_plik(self, rozmiar_pliku):
+            if not self.aktywny_plik:
+                klient, plik = self.przeprowadz_aukcje(self.serwer.klienci)
+                if klient:
+                    self.aktywny_plik = plik
+                    self.aktualny_klient = klient
+                    # Rozpocznij przesyłanie od zapisanego postępu
+                    start = self.postep_przesylania // 10
+                    self.przeslij_plik(plik, start=start)
+                    # Resetuj stan, jeśli przesyłanie zostało zakończone
+                    if not self.zatrzymaj:
+                        self.aktywny_plik = None
+                        self.aktualny_klient = None
+
+    def przeslij_plik(self, rozmiar_pliku, start=0):
         try:
-            czas_przesylania = rozmiar_pliku / self.predkosc_przesylania
-            for _ in range(10):  # Symulacja przesyłania podzielona na 10 kroków
-                time.sleep(czas_przesylania / 10)
-                self.postep_przesylania += 10  # Aktualizacja postępu
-            logging.info(f"Dysk {self.id_dysku}: Zakończono przesyłanie pliku o rozmiarze {rozmiar_pliku}")
-            self.postep_przesylania = 0  # Reset postępu po przesłaniu pliku
+            czas_przesylania = (rozmiar_pliku / self.predkosc_przesylania) / 10
+            for i in range(start, 10):
+                if self.zatrzymaj:
+                    time.sleep(1)  # Czekaj, gdy symulacja jest zatrzymana
+                    continue
+                time.sleep(czas_przesylania)
+                self.postep_przesylania += 10
+            # Resetuj postęp, jeśli cały plik został przesłany
+            if self.postep_przesylania == 100:
+                logging.info(f"Dysk {self.id_dysku}: Zakończono przesyłanie pliku o rozmiarze {rozmiar_pliku}")
+                self.postep_przesylania = 0
         except Exception as e:
             logging.error(f"Dysk {self.id_dysku}: Wystąpił błąd podczas przesyłania pliku - {e}")
 
@@ -105,6 +116,7 @@ class Serwer:
     def __init__(self):
         self.klienci = []
         self.dyski = [Dysk(i, self) for i in range(5)]
+        self.czy_aktywowana = False
 
     def czy_symulacja_aktywna(self):
         # Sprawdza, czy jakikolwiek dysk jest aktywny
@@ -134,7 +146,12 @@ class Serwer:
     def rozpocznij_symulacje(self):
         for klient in self.klienci:
             klient.rozpocznij_odliczanie()
-        self.uruchom()
+        if not self.czy_aktywowana:
+            self.uruchom()
+            self.czy_aktywowana = True
+        else:
+            for dysk in self.dyski:
+                dysk.zatrzymaj = False
 
     def zatrzymaj_symulacje(self):
         for dysk in self.dyski:
