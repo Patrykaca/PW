@@ -104,7 +104,7 @@ class Dysk(threading.Thread):
         for klient in klienci_z_plikami:
             rozmiar_pliku = klient.pliki[0]  # najmniejszy plik
             t = klient.oblicz_czas_oczekiwania()
-            wynik = (k * 10 ** 9 / (rozmiar_pliku + 1)) + math.log(t + 1) / k
+            wynik = (k / (rozmiar_pliku + 1)) + math.log(t + 1) / k
             if wynik > najlepszy_wynik:
                 najlepszy_wynik = wynik
                 wybrany_klient = klient
@@ -198,7 +198,7 @@ class GUI:
     def aktualizuj_interfejs(self):
         for i, dysk in enumerate(self.serwer.dyski):
             postep = f"{dysk.postep_przesylania}%" if dysk.aktywny_plik else "Wolny"
-            klient_info = f", Klient {dysk.aktualny_klient.id_klienta}" if dysk.aktualny_klient else ""
+            klient_info = f", Klient {dysk.aktualny_klient.id_klienta}, {dysk.aktywny_plik//10**6}MB" if dysk.aktualny_klient else ""
             self.labels_dyski[i].config(text=f"Dysk {i}: {postep}{klient_info}")
             self.labels_dyski[i].pack()
 
@@ -210,8 +210,7 @@ class GUI:
             czas_oczekiwania = klient.oblicz_czas_oczekiwania()
             wynik_aukcji = f", Wynik aukcji: {klient.ostatni_wynik_aukcji:.2f}"
             rozmiary_plikow = ', '.join([f"{rozmiar//10**6}MB" for rozmiar in klient.pliki])
-            label_text = f"Klient {klient.id_klienta}: {len(klient.pliki)} plików [{rozmiary_plikow}], Czas : {czas_oczekiwania:.2f} sekund{wynik_aukcji}"
-            # label_text = f"Klient {klient.id_klienta}: {len(klient.pliki)} plików [{rozmiary_plikow}], {wynik_aukcji}"
+            label_text = f"Klient {klient.id_klienta}: {len(klient.pliki)} plików [{rozmiary_plikow}]"
             label = tk.Label(self.root, text=label_text)
             label.pack()
             self.labels_klienci.append(label)
