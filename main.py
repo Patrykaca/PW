@@ -4,7 +4,7 @@ import time
 import threading
 import tkinter as tk
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Konfiguracja logowania
 logging.basicConfig(filename='symulacja.log', level=logging.INFO, format='%(asctime)s - %(message)s')
@@ -16,23 +16,29 @@ class Klient:
         self.pliki = self.generuj_pliki()
         self.czas_start = None
         self.ostatni_wynik_aukcji = 0
+        self.czas_start = None
+        self.ogolny_czas_zatrzymania = 0
+        self.czas_zatrzymania = 0
+        self.czas_ostatniego_zatrzymania = None
 
     def generuj_pliki(self):
         liczba_plikow = random.randint(1, 10)  # Maksymalnie 10 plików
         return sorted([random.randint(1*10**6, 512*10**6) for _ in range(liczba_plikow)])  # Rozmiar od 1MB do 512MB
 
     def rozpocznij_odliczanie(self):
-        if not self.czas_start:
-            self.czas_start = datetime.now()
+        if self.czas_start is None:
+            self.czas_start = datetime.now() - timedelta(seconds=self.czas_zatrzymania)
 
     def zatrzymaj_odliczanie(self):
-        if self.czas_start:
+        if self.czas_start is not None:
+            self.czas_zatrzymania += (datetime.now() - self.czas_start).total_seconds()
             self.czas_start = None
+
 
     def oblicz_czas_oczekiwania(self):
         if self.czas_start:
-            return (datetime.now() - self.czas_start).total_seconds()
-        return 0
+            return (datetime.now() - self.czas_start).total_seconds() + self.czas_zatrzymania
+        return self.czas_zatrzymania
 
 # Klasa Dysku
 class Dysk(threading.Thread):
@@ -46,6 +52,7 @@ class Dysk(threading.Thread):
         self.aktualny_klient = None  # Dodajemy nową właściwość
         self.postep_przesylania = 0
         self.blokada = threading.Lock()
+
 
 
     def run(self):
@@ -120,28 +127,31 @@ class Serwer:
 
     def czy_symulacja_aktywna(self):
         # Sprawdza, czy jakikolwiek dysk jest aktywny
-        return any(dysk.is_alive() for dysk in self.dyski)
+        # return any(dysk.is_alive() for dysk in self.dyski)
+        return self.czy_aktywowana
 
     def dodaj_klienta(self):
         nowy_klient = Klient(len(self.klienci) + 1)
         self.klienci.append(nowy_klient)
 
-        # Jeśli symulacja jest aktywna, rozpocznij odliczanie czasu dla nowego klienta
+        # Rozpocznij odliczanie czasu dla nowego klienta tylko jeśli symulacja jest aktywna
         if self.czy_symulacja_aktywna():
             nowy_klient.rozpocznij_odliczanie()
 
     def uruchom(self):
-        self.zatrzymaj_dyski()  # Upewniamy się, że poprzednie dyski są zatrzymane
-        self.dyski = [Dysk(i, self) for i in range(5)]  # Tworzymy nowe wątki dysków
-        for dysk in self.dyski:
-            dysk.start()
+        if not self.czy_aktywowana:
+            self.zatrzymaj_dyski()  # Upewniamy się, że poprzednie dyski są zatrzymane
+            self.dyski = [Dysk(i, self) for i in range(5)]  # Tworzymy nowe wątki dysków
+            for dysk in self.dyski:
+                dysk.start()
+            self.czy_aktywowana = True
 
     def zatrzymaj_dyski(self):
         for dysk in self.dyski:
             dysk.zatrzymaj = True
             if dysk.is_alive():  # Sprawdzenie, czy wątek został uruchomiony
                 dysk.join()      # Oczekujemy na zakończenie wątku tylko jeśli był uruchomiony
-
+        self.czy_aktywowana = False
 
     def rozpocznij_symulacje(self):
         for klient in self.klienci:
@@ -158,6 +168,7 @@ class Serwer:
             dysk.zatrzymaj = True
         for klient in self.klienci:
             klient.zatrzymaj_odliczanie()
+        self.czy_aktywowana = False
 
     def czy_zakonczyc(self):
         return all(not klient.pliki for klient in self.klienci)
